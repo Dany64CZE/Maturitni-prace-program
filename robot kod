@@ -1,0 +1,82 @@
+#include <Arduino.h>
+#include <ESP32Servo.h>
+
+// definice pinu
+#define SERVO1_PIN 15
+#define SERVO2_PIN 16
+#define SERVO3_PIN 17
+#define SERVO4_PIN 18
+#define trigPin 13
+#define echoPin 12
+#define Rychlost 20
+
+Servo LChodidlo, RChodidlo, RNoha, LNoha;
+float vzdalenost;
+
+void setup() {
+    Serial.begin(9600); // Tady se to hlásí do počítače
+    
+    // alocace pwn
+    ESP32PWM::allocateTimer(0); ESP32PWM::allocateTimer(1);
+    ESP32PWM::allocateTimer(2); ESP32PWM::allocateTimer(3);
+    
+    pinMode(trigPin, OUTPUT); pinMode(echoPin, INPUT);
+    
+    // Zapojení motorů
+    RNoha.attach(SERVO1_PIN); LChodidlo.attach(SERVO2_PIN);
+    RChodidlo.attach(SERVO3_PIN); LNoha.attach(SERVO4_PIN);
+
+    // vychozi pozice
+    RNoha.write(90); RChodidlo.write(90); LChodidlo.write(90); LNoha.write(90);
+    delay(500);
+}
+
+// pohyb 
+void pohni(Servo &s1, Servo &s2, int start, int konec, int krok) {
+    for (int pos = start; pos != konec; pos += krok) {
+        s1.write(pos); s2.write(pos); delay(Rychlost);
+    }
+}
+
+// Pohyby robota
+void dopredu() {
+    pohni(LChodidlo, RChodidlo, 60, 130, 1);
+    pohni(LNoha, RNoha, 120, 60, -1);
+    pohni(LChodidlo, RChodidlo, 130, 60, -1);
+    pohni(LNoha, RNoha, 60, 120, 1);
+}
+
+void doleva() {
+    pohni(LChodidlo, RChodidlo, 60, 130, 1);
+    for(int pos=110; pos>=80; pos--) { RNoha.write(pos); delay(Rychlost); }
+    pohni(LChodidlo, RChodidlo, 130, 60, -1);
+    for(int pos=80; pos<=110; pos++) { RNoha.write(pos); delay(Rychlost); }
+}
+
+void doprava() {
+    pohni(LChodidlo, RChodidlo, 130, 60, -1);
+    for(int pos=70; pos<=100; pos++) { LNoha.write(pos); delay(Rychlost); }
+    pohni(LChodidlo, RChodidlo, 60, 130, 1);
+    for(int pos=100; pos>=70; pos--) { LNoha.write(pos); delay(Rychlost); }
+}
+
+void loop() {
+    // Měření vzdálenosti
+    digitalWrite(trigPin, LOW); delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH); delayMicroseconds(5); digitalWrite(trigPin, LOW);
+    vzdalenost = pulseIn(echoPin, HIGH) / 58.31;
+    
+    Serial.println("Vzdálenost: " + String(vzdalenost)); // ukazka vzdalenosti v terminaalu
+
+    //  volno, jde dopředu
+    while (vzdalenost > 10) {
+        dopredu();
+        // mereni za pohybu
+        digitalWrite(trigPin, HIGH); delayMicroseconds(5); digitalWrite(trigPin, LOW);
+        vzdalenost = pulseIn(echoPin, HIGH) / 58.31;
+    }
+
+    // naraz, náhodně se otočí
+    if (random(2) == 0) for(int i=0; i<5; i++) doleva();
+    else for(int i=0; i<5; i++) doprava();
+}
